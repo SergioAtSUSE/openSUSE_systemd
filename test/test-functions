@@ -22,8 +22,9 @@ if ! ROOTLIBDIR=$(pkg-config --variable=systemdutildir systemd); then
 fi
 
 BASICTOOLS="test sh bash setsid loadkeys setfont login sulogin gzip sleep echo mount umount cryptsetup date dmsetup modprobe sed cmp tee rm true false chmod chown ln"
-DEBUGTOOLS="df free ls stty cat ps ln ip route dmesg dhclient mkdir cp ping dhclient strace less grep id tty touch du sort hostname find"
+DEBUGTOOLS="df free ls stty cat ps ln ip dmesg dhclient mkdir cp ping dhclient strace less grep id tty touch du sort hostname find passwd"
 
+BUILD_DIR=/var/opt/systemd-tests
 STATEDIR="${BUILD_DIR:-.}/test/$(basename $(dirname $(realpath $0)))"
 STATEFILE="$STATEDIR/.testdir"
 TESTLOG="$STATEDIR/test.log"
@@ -321,13 +322,28 @@ install_dmevent() {
 }
 
 install_systemd() {
-    # install compiled files
-    local _ninja_bin=$(type -P ninja || type -P ninja-build)
-    if [[ -z "$_ninja_bin" ]]; then
-        dfatal "ninja was not found"
-        exit 1
-    fi
-    (set -x; DESTDIR=$initdir "$_ninja_bin" -C $BUILD_DIR install)
+    ORIGDIR=$(pwd)
+    cd $TEST_BASE_DIR/..
+    for i in $(find /usr/lib/systemd -type f); do
+            inst_simple $i
+    done
+    for i in $(find /usr/lib/systemd -type l); do
+            inst_symlink $i
+    done
+    for i in $( find /usr/lib/systemd/* -type d); do
+            [[ -d $i ]] || mkdir $i
+            for j in $(find $i); do
+                    [[ -d $j ]] || inst_simple $j
+            done
+    done
+    for i in $(rpm -ql systemd | sed -n '/usr\/bin/p'); do
+            inst_simple $i
+    done
+    for i in $(find /usr/lib/udev); do
+            [[ -d $i ]] && inst_dir $i || inst_simple $i
+    done
+    cd $ORIGDIR
+
     # remove unneeded documentation
     rm -fr $initdir/usr/share/{man,doc}
     # we strip binaries since debug symbols increase binaries size a lot
@@ -949,6 +965,7 @@ find_binary() {
 # Install binary executable, and all shared library dependencies, if any.
 inst_binary() {
     local _bin _target
+    [[ -f ${initdir}$1 ]] && return 0
     _bin=$(find_binary "$1") || return 1
     _target=${2:-$_bin}
     [[ -e $initdir/$_target ]] && return 0
@@ -1381,9 +1398,15 @@ inst_libdir_file() {
 }
 
 setup_suse() {
-    ln -s ../usr/bin/systemctl $initdir/bin/systemctl
-    ln -s ../usr/lib/systemd $initdir/lib/systemd
-    inst_simple "/usr/lib/systemd/system/haveged.service"
+    [[ -f $initdir/bin/systemctl ]] || ln -s ../usr/bin/systemctl $initdir/bin/systemctl
+    inst_simple /usr/lib/systemd/system/haveged.service
+    inst_simple /usr/bin/systemd-cat
+
+    for dracutfile in cmdline initqueue mount pre-mount pre-pivot pre-trigger pre-udev; do
+            inst_script $(find /usr/lib -name dracut-$dracutfile.sh) /bin/dracut-$dracutfile
+    done
+
+    rm $initdir/usr/lib/systemd/system-generators/systemd-getty-generator
 }
 
 # can be overridden in specific test
