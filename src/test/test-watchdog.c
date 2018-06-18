@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
         r = getenv_bool("SYSTEMD_SLOW_TESTS");
         slow = r >= 0 ? r : SYSTEMD_SLOW_TESTS_DEFAULT;
 
-        t = slow ? 10 * USEC_PER_SEC : 1 * USEC_PER_SEC;
+        t = slow ? 30 * USEC_PER_SEC : 1 * USEC_PER_SEC;
         count = slow ? 5 : 3;
 
         r = watchdog_set_timeout(&t);
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
                 if (r < 0)
                         log_warning_errno(r, "Failed to ping watchdog: %m");
 
-                usleep(t/2);
+                usleep(t/6);
         }
 
         watchdog_close(true);
