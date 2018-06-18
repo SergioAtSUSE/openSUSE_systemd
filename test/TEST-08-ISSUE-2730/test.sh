@@ -8,7 +8,7 @@ TEST_NO_NSPAWN=1
 . $TEST_BASE_DIR/test-functions
 SKIP_INITRD=yes
 QEMU_TIMEOUT=180
-FSTYPE=ext4
+FSTYPE=btrfs
 
 test_setup() {
     create_empty_image
